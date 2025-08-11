@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Сказочки — с плеером</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  /* ===========================
+     Настройки — редактируй здесь
+     Все важные параметры вынесены в :root переменные
+     =========================== */
+  :root{
+    --btn-size-main: 46px;   /* размер кнопки пуск/пауза */
+    --btn-size-small: 38px;  /* размер кнопок перемотки */
+    /* --- Общие цвета фона страницы --- */
+    --bg-top: #190829;
+    --bg-bottom: #010007;
+    --text: #F3F2F7;
+    --muted: #cfcfcf;
+    --pill: #2b2b2b;
+
+    /* === Настройки карточек треков (глобальные) === */
+    --track-width: 100%;              /* ширина карточки (как правило 100% контейнера) */
+    --track-gap: clamp(14px,1.6vw,18px);
+    --cover-size: clamp(64px,5vw,80px); /* размер обложки в строке */
+    --cover-radius: clamp(12px,1.2vw,12px); /* скругление обложки */
+    --track-title-size: clamp(18px,2.2vw,24px);
+    --track-author-size: clamp(12px,1vw,16px);
+    --track-time-size: clamp(14px,1.4vw,16px);
+    --track-spacing: clamp(8px, 1.2vw, 12px); /* расстояние между треками */
+
+    /* === Настройки плеера (модал) === */
+    --overlay-bg: rgba(7,6,8,0.6);    /* цвет полупрозрачного наложения (фон при модале) */
+    --overlay-blur: 8px;              /* эффект размытия под модалом (backdrop-filter) */
+    --player-bg: #505050;             /* фон плеера */
+    --player-radius: 20px;            /* скругление плеера */
+    --player-width: min(690px, 110vw); /* ширина плеера */
+    --player-padding: 36px;           /* внутренние отступы */
+
+    --cover-bg: #C4C4C4;              /* обложка временная */
+    --cover-size-player: 280px;       /* размер квадрата обложки в плеере */
+    --cover-radius-player: 12px;      /* скругление обложки */
+
+    --title-color: #FFFFFF;           /* цвет названия */
+    --title-size: 20px;
+    --author-color: #8F8F8F;          /* цвет автора */
+    --author-size: 16px;
+
+    --btn-bg: #FFFFFF;                /* фон кнопок управления */
+    --btn-fg: #C4C4C4;                /* иконки на кнопках (внутренняя заливка) */
+    --btn-size: 40px;                 /* размер квадратной кнопки */
+    --btn-radius: 999px;              /* сделать круглой: big radius */
+
+    --progress-height: 6px;           /* высота полосы */
+    --progress-radius: 6px;
+    --progress-bg: rgba(255,255,255,0.12); /* фон полосы (непрослушанная часть) */
+    --progress-fill: #FFFFFF;         /* цвет прослушанной части */
+    --marker-size: 12px;              /* размер кружка-маркера */
+    --marker-color: #FFFFFF;          /* цвет маркера */
+
+    --time-color: #8F8F8F;            /* цвет временных меток */
+  }
+
+  /* ===========================
+     Общие стили страницы
+     =========================== */
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    color:var(--text);
+    font-family:Montserrat,system-ui,-apple-system,"Segoe UI",Roboto,Arial,"Noto Sans",sans-serif;
+    background: linear-gradient(180deg,var(--bg-top) 0%,var(--bg-bottom) 100%);
+    background-attachment: fixed;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    padding: clamp(24px,4vw,48px) clamp(16px,3vw,40px);
+  }
+  .main-wrapper{
+    width:min(96vw, 1200px);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: clamp(18px,2vw,28px);
+  }
+
+  h1{
+    font-weight:750;
+    font-size: clamp(26px,6vw,60px);
+    line-height:.95;
+    text-align:center;
+    margin:0;
+    margin-bottom: 60px;
+  }
+
+  .track-list{
+    width:min(96vw, 1000px);
+    display:flex;
+    flex-direction:column;
+    gap: var(--track-spacing);
+  
+  }
+
+  /* карточка трека — использует глобальные переменные */
+  .track{
+    width: var(--track-width);
+    display:grid;
+    grid-template-columns: var(--cover-size) 1fr auto;
+    gap: var(--track-gap);
+    align-items:center;
+    padding: 10px 8px;
+    cursor: pointer;
+    background: transparent;
+  }
+  .cover{
+    width: var(--cover-size);
+    height: var(--cover-size);
+    border-radius: var(--cover-radius);
+    background: #bdbdbd;
+    flex-shrink: 0;
+  }
+  .track-text{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .track-title{
+    font-weight:800;
+    font-size: var(--track-title-size);
+    line-height:1.1;
+    word-break: break-word;
+  }
+  .track-author{
+    font-size: var(--track-author-size);
+    color: var(--muted);
+  }
+  .track-time{
+    white-space:nowrap;
+    font-weight:800;
+    color: var(--muted);
+    font-size: var(--track-time-size);
+  }
+
+  /* стартовые анимации появления */
+  .track{ opacity:0; transform: translateY(10px); transition: opacity .36s ease, transform .36s ease; }
+  .track.visible{ opacity:1; transform: translateY(0); }
+
+  .pill{
+    width:min(92vw, 780px);
+    background: #2b2b2b;
+    color:#D0D0D0;
+    border-radius: 36px;
+    padding: clamp(14px,1.8vw,18px) clamp(18px,2.6vw,26px);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-weight:800;
+    letter-spacing:.2px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.12) inset, 0 1px 0 rgba(255,255,255,.02);
+    margin-top: clamp(8px,1.6vw,16px);
+  }
+  .pill .label{ font-size: clamp(16px,2vw,30px); color: #C6C6C6; opacity:.9; }
+  .pill .time{ font-size: clamp(16px,2.2vw,30px); color:#BFBFBF; }
+
+  /* скрываем встроенные audio элементы (в списке их нет) */
+  audio{ display:none; }
+
+  /* ===========================
+     Модальное окно плеера
+     =========================== */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: none; /* показывается через .open */
+    align-items: center;
+    justify-content: center;
+    background: var(--overlay-bg);
+    backdrop-filter: blur(var(--overlay-blur));
+    z-index: 1200;
+    padding: 24px;
+  }
+  .overlay.open { display:flex; }
+
+  .player {
+    width: var(--player-width);
+    background: var(--player-bg);
+    border-radius: var(--player-radius);
+    padding: var(--player-padding);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 2px 0 rgba(255,255,255,0.02) inset;
+    color: var(--text);
+    position: relative;
+  }
+
+  /* шапка (обложка) */
+  .player .cover-large {
+    width: var(--cover-size-player);
+    height: var(--cover-size-player);
+    background: var(--cover-bg);
+    border-radius: var(--cover-radius-player);
+    margin: 0 auto 18px auto;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  }
+
+  .player .meta { text-align:center; margin-bottom:16px; }
+  .player .title { color: var(--title-color); font-size: var(--title-size); font-weight:800; margin: 8px 0 4px 0; }
+  .player .author { color: var(--author-color); font-size: var(--author-size); margin-bottom:8px; }
+
+  /* кнопки управления: квадратные с закруглениями — пока иконки квадраты внутри */
+  .controls { display:flex; gap:18px; align-items:center; justify-content:center; margin: 12px 0 18px 0; }
+  .btn {
+    width: var(--btn-size);
+    height: var(--btn-size);
+    border-radius: var(--btn-radius);
+    background: var(--btn-bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    border: none;
+  }
+  .btn .glyph {
+    width: 54%;
+    height: 54%;
+    background: var(--btn-fg);
+    border-radius: 6px;
+  }
+  .btn.disabled { opacity: 0.45; filter: grayscale(1); cursor: default; pointer-events: none; }
+
+  
+  .btn.play {
+    width: var(--btn-size-main);
+    height: var(--btn-size-main);
+  }
+  .btn.small {
+    width: var(--btn-size-small);
+    height: var(--btn-size-small);
+  }
+
+  /* прогресс бар */
+  .progress-wrap {
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .time-left, .time-right { color: var(--time-color); font-size: 13px; width:48px; text-align:center; }
+  .progress {
+    flex:1;
+    height: var(--progress-height);
+    background: var(--progress-bg);
+    border-radius: var(--progress-radius);
+    position: relative;
+    display:flex;
+    align-items:center;
+  }
+  .progress .fill {
+    height:100%;
+    background: var(--progress-fill);
+    width:0%;
+    border-radius: var(--progress-radius);
+  }
+  .progress .marker {
+    position:absolute;
+    left:0%;
+    transform: translate(-50%, -50%);
+    top:50%;
+    width: var(--marker-size);
+    height: var(--marker-size);
+    background: var(--marker-color);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+
+  /* кнопка закрытия */
+  .close-x {
+    position:absolute;
+    right:12px;
+    top:12px;
+    width:34px;height:34px;border-radius:8px;
+    background:transparent;border:0;color:var(--muted);cursor:pointer;
+  }
+
+  /* адаптив */
+  @media (max-width:520px){
+    :root{
+      --cover-size-player: 220px;
+      --player-padding: 20px;
+      --btn-size: 44px;
+    }
+    .player { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+  <div class="main-wrapper">
+    <h1>Для самой маленькой и<br>любимой принцессы..</h1>
+
+    <div id="list" class="track-list"></div>
+
+    <div class="pill" id="pill" aria-live="polite">
+      <div class="label">Сказочка доступна через:</div>
+      <div class="time" id="countdown">00:00</div>
+    </div>
+  </div>
+
+  <!-- Модальное окно плеера -->
+  <div class="overlay" id="overlay" aria-hidden="true">
+    <div class="player" role="dialog" aria-label="Аудиоплеер">
+      <button class="close-x" id="closePlayer" title="Закрыть">✕</button>
+      <div class="cover-large" id="playerCover" aria-hidden="true"></div>
+
+      <div class="meta">
+        <div class="title" id="playerTitle">Название сказки</div>
+        <div class="author" id="playerAuthor">Автор сказки</div>
+      </div>
+
+      <div class="controls">
+        <button class="btn small" id="prevBtn" title="Предыдущий"><div class="glyph"></div></button>
+        <button class="btn play" id="playBtn" title="Воспроизвести"><div class="glyph" id="playGlyph"></div></button>
+        <button class="btn small" id="nextBtn" title="Следующий"><div class="glyph"></div></button>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="time-left" id="timeLeft">00:00</div>
+        <div class="progress" id="progressBar" aria-valuemin="0" aria-valuemax="100" role="progressbar">
+          <div class="fill" id="progressFill"></div>
+          <div class="marker" id="progressMarker" role="slider" aria-valuemin="0" aria-valuemax="100" tabindex="0"></div>
+        </div>
+        <div class="time-right" id="timeRight">00:00</div>
+      </div>
+
+      <!-- Встроенный audio — один экземпляр для модального плеера -->
+      <audio id="playerAudio" preload="metadata"></audio>
+    </div>
+  </div>
+
+<script>
+/* ===========================
+   Данные треков (пример): 
+   ты потом заменишь src на свои пути в media/ или URL
+   =========================== */
+const tracksData = [
+  { title: "Название сказки", author: "Автор сказки", time: "03:21", src: "media/story1.mp3" },
+  { title: "Название сказки", author: "Автор сказки", time: "04:58", src: "media/story2.mp3" },
+  { title: "Название сказки", author: "Автор сказки", time: "05:12", src: "media/story3.mp3" },
+  { title: "Название сказки", author: "Автор сказки", time: "02:47", src: "media/story4.mp3" },
+];
+
+/* ===== Lock / unlock logic (как раньше) ===== */
+const KEY = "unlockedCount";
+let unlockedCount = Math.max(1, parseInt(localStorage.getItem(KEY) || "1", 10));
+unlockedCount = Math.min(unlockedCount, tracksData.length);
+
+const list = document.getElementById("list");
+
+/* ===== Рендерим только открытые треки (0..unlockedCount-1) ===== */
+function render(){
+  list.innerHTML = "";
+  const count = Math.min(unlockedCount, tracksData.length);
+  for (let i = 0; i < count; i++){
+    const t = tracksData[i];
+    const row = document.createElement("div");
+    row.className = "track";
+    row.dataset.track = String(i);
+    row.innerHTML = `
+      <div class="cover" aria-hidden="true"></div>
+      <div class="track-text">
+        <div class="track-title">${t.title}</div>
+        <div class="track-author">${t.author}</div>
+      </div>
+      <div class="track-time">${t.time}</div>
+    `;
+    // по клику открываем плеер и загружаем этот трек
+    row.addEventListener('click', ()=> openPlayerAtIndex(i));
+    list.appendChild(row);
+    requestAnimationFrame(()=> row.classList.add('visible'));
+  }
+  document.getElementById("pill").style.display = (unlockedCount >= tracksData.length) ? "none" : "flex";
+}
+
+/* ========== Timer logic (20:00 opening) ========== */
+const countdownEl = document.getElementById("countdown");
+function pad(n){ return String(n).padStart(2,'0'); }
+function next2000(){
+  const now = new Date();
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
+  if (t - now <= 0) t.setDate(t.getDate()+1);
+  return t;
+}
+let target = next2000();
+function tick(){
+  if (unlockedCount >= tracksData.length){ return; }
+  const now = new Date();
+  let diff = target - now;
+  if (diff <= 0){
+    if (unlockedCount < tracksData.length){
+      unlockedCount += 1;
+      localStorage.setItem(KEY, String(unlockedCount));
+      render();
+    }
+    target = next2000();
+    diff = target - new Date();
+  }
+  const h = Math.floor(diff/3_600_000);
+  const m = Math.floor((diff%3_600_000)/60_000);
+  const s = Math.floor((diff%60_000)/1000);
+  countdownEl.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+  requestAnimationFrame(tick);
+}
+
+/* ========== Quick test (comment out for real use) ========== */
+ // для быстрого тестирования — открыть следующий трек через 6 секунд
+ // target = new Date(Date.now() + 6000);
+
+/* ========= Player logic ========= */
+const overlay = document.getElementById('overlay');
+const player = document.querySelector('.player');
+const playerAudio = document.getElementById('playerAudio');
+const playerCover = document.getElementById('playerCover');
+const playerTitle = document.getElementById('playerTitle');
+const playerAuthor = document.getElementById('playerAuthor');
+const playBtn = document.getElementById('playBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const timeLeftEl = document.getElementById('timeLeft');
+const timeRightEl = document.getElementById('timeRight');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+const progressMarker = document.getElementById('progressMarker');
+const closePlayer = document.getElementById('closePlayer');
+
+let currentIndex = 0;
+let isPlaying = false;
+let isSeeking = false;
+
+/* helper: format seconds => MM:SS */
+function secToTime(s){
+  if (!isFinite(s)) return '00:00';
+  s = Math.max(0, Math.floor(s));
+  const m = Math.floor(s/60);
+  const sec = s % 60;
+  return `${pad(m)}:${pad(sec)}`;
+}
+
+/* load track into modal (but do not autoplay) */
+function loadTrack(idx){
+  const t = tracksData[idx];
+  currentIndex = idx;
+  playerTitle.textContent = t.title;
+  playerAuthor.textContent = t.author;
+  // placeholder cover color/text (можно заменить на <img> или background-image)
+  playerCover.style.background = 'var(--cover-bg)';
+  // set src
+  playerAudio.src = t.src;
+  playerAudio.load();
+  // update duration if available after metadata loaded
+  playerAudio.addEventListener('loadedmetadata', ()=> {
+    timeRightEl.textContent = secToTime(playerAudio.duration);
+    updateProgress(); // refresh progress visuals
+  }, { once: true });
+
+  // set button states
+  updateNavButtons();
+  updatePlayButtonVisual();
+}
+
+/* open modal and focus */
+function openPlayerAtIndex(idx){
+  loadTrack(idx);
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden','false');
+  // optionally hide main controls while modal open — currently we leave list visible with blur by overlay
+}
+
+/* close */
+closePlayer.addEventListener('click', ()=> {
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden','true');
+  // pause audio
+  playerAudio.pause();
+  isPlaying = false;
+  updatePlayButtonVisual();
+});
+
+/* play/pause toggle */
+playBtn.addEventListener('click', ()=>{
+  if (!playerAudio.src) return;
+  if (isPlaying){
+    playerAudio.pause();
+  } else {
+    playerAudio.play().catch(()=>{});
+  }
+});
+playerAudio.addEventListener('play', ()=> { isPlaying = true; updatePlayButtonVisual(); });
+playerAudio.addEventListener('pause', ()=> { isPlaying = false; updatePlayButtonVisual(); });
+
+function updatePlayButtonVisual(){
+  // simple visual: if playing — glyph filled differently
+  const glyph = document.getElementById('playGlyph');
+  if (!glyph) return;
+  if (isPlaying){
+    glyph.style.background = 'var(--btn-fg)';
+  } else {
+    glyph.style.background = 'transparent';
+    glyph.style.border = '6px solid var(--btn-fg)';
+    glyph.style.borderLeft = '10px solid var(--btn-fg)';
+    glyph.style.borderTop = '6px solid transparent';
+    glyph.style.borderBottom = '6px solid transparent';
+    glyph.style.width = '0';
+    glyph.style.height = '0';
+  }
+}
+
+/* prev/next handlers */
+prevBtn.addEventListener('click', ()=> {
+  if (currentIndex > 0 && currentIndex-1 < unlockedCount){
+    loadTrack(currentIndex - 1);
+    playerAudio.play().catch(()=>{});
+  }
+});
+nextBtn.addEventListener('click', ()=> {
+  if (currentIndex + 1 < unlockedCount){
+    loadTrack(currentIndex + 1);
+    playerAudio.play().catch(()=>{});
+  }
+});
+
+/* update nav buttons (disable if outside unlocked) */
+function updateNavButtons(){
+  if (currentIndex <= 0 || currentIndex - 1 >= unlockedCount) {
+    prevBtn.classList.add('disabled');
+  } else prevBtn.classList.remove('disabled');
+
+  if (currentIndex + 1 >= unlockedCount) {
+    nextBtn.classList.add('disabled');
+  } else nextBtn.classList.remove('disabled');
+}
+
+/* progress update */
+function updateProgress(){
+  if (!playerAudio.duration || isNaN(playerAudio.duration)) {
+    progressFill.style.width = '0%';
+    progressMarker.style.left = '0%';
+    timeLeftEl.textContent = '00:00';
+    timeRightEl.textContent = secToTime(playerAudio.duration || 0);
+    return;
+  }
+  const pct = (playerAudio.currentTime / playerAudio.duration) * 100;
+  progressFill.style.width = pct + '%';
+  progressMarker.style.left = pct + '%';
+  timeLeftEl.textContent = secToTime(playerAudio.currentTime);
+}
+
+/* audio timeupdate */
+playerAudio.addEventListener('timeupdate', updateProgress);
+playerAudio.addEventListener('ended', ()=> {
+  isPlaying = false;
+  updatePlayButtonVisual();
+});
+
+/* Seek by clicking on bar */
+progressBar.addEventListener('click', (e)=>{
+  if (!playerAudio.duration) return;
+  const rect = progressBar.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const pct = Math.max(0, Math.min(1, x / rect.width));
+  playerAudio.currentTime = pct * playerAudio.duration;
+  updateProgress();
+});
+
+/* Make marker draggable (mouse only simple) */
+let dragging = false;
+progressMarker.addEventListener('mousedown', (e)=>{
+  e.preventDefault();
+  dragging = true;
+});
+window.addEventListener('mousemove', (e)=>{
+  if (!dragging || !playerAudio.duration) return;
+  const rect = progressBar.getBoundingClientRect();
+  const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+  const pct = x / rect.width;
+  progressMarker.style.left = (pct*100) + '%';
+  progressFill.style.width = (pct*100) + '%';
+  playerAudio.currentTime = pct * playerAudio.duration;
+});
+window.addEventListener('mouseup', ()=> { dragging = false; });
+
+/* keyboard: Esc -> close */
+window.addEventListener('keydown', (e)=> {
+  if (e.key === 'Escape') {
+    overlay.classList.remove('open');
+    playerAudio.pause();
+  }
+});
+
+/* ========== initial render and timer ========== */
+render();
+tick();
+
+/* For dev: expose some shortcuts in console to change variables quickly
+   window.setTrackSize = (v) => document.documentElement.style.setProperty('--cover-size', v);
+*/
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('resetFirstVisit');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    try {
+      // удалить ключ с прогрессом
+      localStorage.removeItem('unlockedCount');
+      // очистить sessionStorage
+      sessionStorage.clear();
+
+      // удалить куки
+      document.cookie.split(";").forEach(c => {
+        const name = c.split("=")[0].trim();
+        if (!name) return;
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      });
+
+      // снять service workers (если есть)
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    } catch (e) {
+      console.warn('resetFirstVisit error', e);
+    }
+
+    // перезагрузка страницы
+    setTimeout(() => location.reload(), 150);
+  });
+});
+</script>
+<!-- dev: полный сброс как при первом заходе -->
+<div id="devTools" style="position:fixed;bottom:10px;right:10px;background:#222;color:#fff;padding:10px;border-radius:8px;z-index:2000;">
+  <button id="resetFirstVisit">Сбросить как при первом заходе</button>
+</div>
+
+<script src="scripts/resetProgress.js"></script>
+</body>
+</html>
